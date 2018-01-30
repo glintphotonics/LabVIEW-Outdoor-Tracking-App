@@ -1,2 +1,2 @@
-# LabVIEWOutdoorTrackingApp
+# LabVIEW-Outdoor-Tracking-App
 LabVIEW app that tracks the output of sensors, position of the sheet, predicted position of the sheet using RaZON data, etc...
