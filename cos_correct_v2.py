@@ -109,11 +109,12 @@ if __name__ == '__main__':
     # Make request to RaZON for data, handle connection error
     try:
         r5 = requests.get("http://"+str(razonIP)+"/loggings/exportdata.csv", data=payload)
+        # print('Solar angle request: {}'.format(r5.content))
     except ConnectionError:
         raise
     try:
         r6 = requests.get("http://"+str(razonIP)+"/status_trackings/lastirradiance?")
-        print('Last Irradiance request: {}'.format(r6.content))
+        # print('Last Irradiance request: {}'.format(r6.content))
     except ConnectionError:
         raise
 
@@ -130,7 +131,6 @@ if __name__ == '__main__':
         irrid_arr = irrid_arr[0]
     irrid = [convert_float(i) for i in irrid_arr][-3]
 
-    print(irrid)
 
     # Get appropriate row (current minute data)
     times = dni_df['Time (hh:mm:ss)']
@@ -159,6 +159,9 @@ if __name__ == '__main__':
     dni_df = dni_df[greaterThanStart & lessThanEnd]
     dni_df = dni_df.reset_index()
     # print(dni_df)
+    # print(len(dni_df.index))
+    if len(dni_df.index) == 0:
+        sys.exit(0)
 
     # Solar angles used for cosine correction
     azimuth_angles = (dni_df['SolarAzimuth (Degrees)']).map(math.radians)
@@ -178,6 +181,8 @@ if __name__ == '__main__':
     illumination = dni_df['Irrid. (W/m2)']
     dni_df['Cosine Corrected DNI'] = illumination*(dni_df['Cos(Theta)']*
                                                    dni_df['Cos(Phi)'])
+    # print(dni_df['Cos(Theta)'])
+    # print(dni_df['Cos(Phi)'])
     irrid = irrid*float(dni_df['Cos(Theta)'])*float(dni_df['Cos(Phi)'])
 
     # print(dt.datetime.strptime(dni_df['Time (hh:mm:ss)'].ix[0], ' %H:%M:%S'), 

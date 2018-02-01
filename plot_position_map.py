@@ -11,6 +11,8 @@ from pandas import DataFrame
 from scipy.optimize import curve_fit
 from scipy import stats
 import sys
+from  Tkinter import *
+import Tkinter, Tkconstants, tkFileDialog
 
 
 def print_full(x):
@@ -24,10 +26,11 @@ def f(x):
 
 
 def main():
-    theta = float(sys.argv[1])
-    phi = float(sys.argv[2])
+    Tk().withdraw()
+    file = tkFileDialog.askopenfilename()
+    print (file)
 
-    df2 = pd.read_csv("../../Quad Detector/Reference/Gen1 1deg Angle Position Map.csv", index_col=0)
+    df2 = pd.read_csv(file, index_col=0)
     # Reference adjustment (Focal Position vs. Solar Angle)
     # Filter out angle pairs that are out of the 50 deg radius
     df2["Theta"] = -df2["Theta"]
@@ -49,21 +52,23 @@ def main():
     _neghelp = [-1 * item for item in _neghelp]
     df4 = df2neg[df2neg["Phi"] >= _neghelp]
     ref = pd.concat([df3, df4])
-    print_full(ref)
+    # print_full(ref)
 
-    diffs = ref.copy()
-    diffs["Theta"] = (diffs["Theta"] - theta).abs()
-    diffs["Phi"] = (diffs["Phi"] - phi).abs()
-    diffs = diffs.sort_values(["Theta", "Phi"], ascending=True)
-    # print_full(diffs)
-    # print(diffs.index[0])
-    min_index = diffs.index[0]
-    # print(min_index)
-    row = ref.ix[min_index]
-    # print(row)
-    print(row['X'], row['Y'])
-
-    # ref = 
+    fig = plt.figure()
+    ax = fig.gca()
+    # ax.set_xticks(numpy.arange(0, 1, 0.1))
+    # ax.set_yticks(numpy.arange(0, 1., 0.1))
+    major_x_ticks = np.arange(min(ref['X']), max(ref['X']), 1)
+    minor_x_ticks = np.arange(min(ref['X']), max(ref['X']), 0.2)
+    major_y_ticks = np.arange(min(ref['Y']), max(ref['Y']), 1)
+    minor_y_ticks = np.arange(min(ref['Y']), max(ref['Y']), 0.2)
+    ax.set_xticks(major_x_ticks)
+    ax.set_xticks(minor_x_ticks, minor=True)
+    ax.set_yticks(major_y_ticks)
+    ax.set_yticks(minor_y_ticks, minor=True)
+    ax.grid(color='black')
+    plt.scatter(ref['X'], ref['Y'], s=2)
+    plt.show()
 
 
 if __name__ == '__main__':
