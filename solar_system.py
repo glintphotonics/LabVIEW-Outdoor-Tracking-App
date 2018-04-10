@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Daily solar tracking system based on GPS input
 # Made to interact with LabVIEW
 from astral import Astral, Location
