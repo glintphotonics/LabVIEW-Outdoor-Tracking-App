@@ -71,7 +71,7 @@ class RaZON():
         corrected_datetimes = df['Datetime Local']
 
         # Slice data by start and end time and return the dataframe
-        greaterThanStart = corrected_datetimes > start
+        greaterThanStart = corrected_datetimes >= start
         lessThanEnd = corrected_datetimes <= end
         time.sleep(0.2)
         df = df[greaterThanStart & lessThanEnd]
@@ -206,21 +206,33 @@ class RaZON():
             dni_df[col] = pd.Series(cos_correct_df[col], index=dni_df.index)
         return dni_df
 
-    def get_position_from_angle(self, data, start, end):
+    def get_position_from_angle(self, data, start, end,
+                                num_interp_points=0, 
+                                interp_method='linear'):
         # Obtain cos factors and corrected data
         dni_df, altitude_angles, azimuth_angles = data
         cos_correct_df = self.get_cos_factors(altitude_angles, azimuth_angles)
-        dni_df = self.cos_correct(dni_df, cos_correct_df)
+        # dni_df = self.cos_correct(dni_df, cos_correct_df)
 
         angles = pd.DataFrame()
-        angles['Theta'] = dni_df['Theta_']
-        angles['Phi'] = dni_df['Phi_']
+        angles['Theta'] = cos_correct_df['Theta_']
+        angles['Phi'] = cos_correct_df['Phi_']
 
-        def match_angles_wrapper(angles):
-            mapping = read_and_clean_angle_position()
-            return match_angles(mapping, angles[0], angles[1])
+        print('Generating the Angle to Position Map...')
+        mapping = read_and_clean_map()
+        mapping = table_interpolation(mapping, num_interp_points, interp_method)
+        mapping = fit_interp_data(mapping)
+        mapping = filter_angle_position(mapping)
+        print('Done.')
 
-        positions = angles.apply(match_angles_wrapper, axis=1)
+        def match_angles_wrapper(mapping):
+            def match_angles_mapper(angles):
+                return match_angles(mapping, angles[0], angles[1])
+            return match_angles_mapper
+
+        print('Matching tracked angles to mapped angles...')
+        positions = angles.apply(match_angles_wrapper(mapping), axis=1)
+        print('Done.')
         positions = [(x[0], x[1]) for x in positions]
         positions = zip(*positions)
         positions = pd.DataFrame(positions).transpose()
