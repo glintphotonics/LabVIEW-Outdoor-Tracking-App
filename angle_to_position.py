@@ -81,9 +81,15 @@ def match_angles(angle_position_map, theta, phi):
     # print(row.keys())
     # print(list(row.keys()))
     # print(row['X'], row['Y'])
+    positions_list = ()
+    # print(row.keys())
     if 'Interp. X (mm)' in list(row.keys()):
-        return row['Interp. X (mm)'], row['Interp. Y (mm)']
-    return row['X'], row['Y']
+        positions_list += (row['Interp. X (mm)'], row['Interp. Y (mm)'])
+    if 'Fitted X Interp. (mm)' in list(row.keys()):
+        positions_list += (row['Fitted X Interp. (mm)'], row['Fitted Y Interp. (mm)'])
+    if 'X' in list(row.keys()):
+        positions_list += (row['X'], row['Y'])
+    return positions_list
 
 def table_interpolation(mapping_df, num_interp_points=0, interp_method='linear'):
     # Number of added points inbetween integer angles
@@ -243,7 +249,8 @@ def fit_interp_data(interp_map):
     # return interp_map
 
     min_y = interp_map['Interp. Y (mm)'].min()
-    t_init = [5, 1, 5, 1, -1, 1, 1]
+    # t_init = [5, 1, 5, 1, -1, 1, 1]
+    t_init = [0.1, 0.1, 0.1, 0, 0.1, 0.1, 1]
     t_interp = interp_map.index.values
     y_interp = interp_map['Interp. Y (mm)']
     res_lsq = least_squares(sin_cos_plus_resid, t_init, 
@@ -258,7 +265,8 @@ def fit_interp_data(interp_map):
     # interp_map.sort_values(by=['Old Index'], inplace=True)
 
     min_x = interp_map['Interp. X (mm)'].min()
-    t_init = [5, 1, 5, 1, -1, 1, 1]
+    # t_init = [5, 1, 5, 1, -1, 1, 1]
+    t_init = [0, 1, 1, 0, 1, 1, 1]
     t_interp = interp_map.index.values
     x_interp = interp_map['Interp. X (mm)']
     res_lsq = least_squares(sin_cos_plus_resid, t_init, 
@@ -273,7 +281,66 @@ def fit_interp_data(interp_map):
     # interp_map.sort_values(by=['Old Index'], inplace=True)
     return interp_map
 
+def get_cos_factors(tilt, azimuth_angles, altitude_angles):
+    cos_correct_df = pd.DataFrame()
+    # Calculation of cos correction factors
+    cos_correct_df['Cos(Theta)'] = altitude_angles.map(math.cos)*azimuth_angles.map(math.sin)
+    cos_correct_df['Cos(Phi)'] = (math.sin(tilt)*altitude_angles.map(math.sin) + 
+                                  math.cos(tilt)*altitude_angles.map(math.cos)*
+                                  azimuth_angles.map(math.cos))
+    cos_correct_df['Theta_'] = 90.0 - cos_correct_df['Cos(Theta)'].map(math.acos).map(math.degrees)
+    cos_correct_df['Phi_'] = 90.0 - cos_correct_df['Cos(Phi)'].map(math.acos).map(math.degrees)
+    cos_correct_df['Cos(Theta)'] = cos_correct_df['Theta_'].map(math.radians).map(math.cos)
+    cos_correct_df['Cos(Phi)'] = cos_correct_df['Phi_'].map(math.radians).map(math.cos)
+    return cos_correct_df
 
+def get_position_from_angle(data, tilt, num_interp_points=0, interp_method='linear'):
+    # Obtain cos factors and corrected data
+    azimuth_angles, altitude_angles = data['Azimuth (rad)'], data['Altitude (rad)']
+    cos_correct_df = get_cos_factors(tilt, azimuth_angles, altitude_angles)
+    # dni_df = self.cos_correct(dni_df, cos_correct_df)
+
+    angles = pd.DataFrame()
+    angles['Theta'] = cos_correct_df['Theta_']
+    angles['Phi'] = cos_correct_df['Phi_']
+
+    print('Generating the Angle to Position Map...')
+    mapping = read_and_clean_map()
+    print(mapping.head())
+    mapping = table_interpolation(mapping, num_interp_points, interp_method)
+    print(mapping.head())
+    mapping = fit_interp_data(mapping)
+    print(mapping.head())
+    mapping = filter_angle_position(mapping)
+    print(mapping.head())
+    print('Done.')
+
+    def match_angles_wrapper(mapping):
+        def match_angles_mapper(angles):
+            return match_angles(mapping, angles[0], angles[1])
+        return match_angles_mapper
+
+    print('Matching tracked angles to mapped angles...')
+    positions = angles.apply(match_angles_wrapper(mapping), axis=1)
+    print('Done.')
+    print(positions[0])
+    positions = [tuple(x[i] for i in range(len(x))) for x in positions]
+    print(positions[0])
+    positions = zip(*positions)
+    print(positions[0])
+    positions = pd.DataFrame(positions).transpose()
+    print(positions.iloc[0])
+    full_position_cols = ['Interp. X (mm)', 
+                          'Interp. Y (mm)', 
+                          'Fitted X Interp. (mm)',
+                          'Fitted Y Interp. (mm)',
+                          'X', 'Y']
+    col_names = dict(zip(positions.columns, full_position_cols))
+    positions = positions.rename(columns=col_names)
+    print(positions.iloc[0])
+    positions['Datetime Local'] = data['Datetime Local']
+    print(positions.iloc[0])
+    return positions
 
 def main():
     theta = float(sys.argv[1])

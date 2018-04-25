@@ -142,7 +142,10 @@ class RaZON():
         azimuth_angles = (dni_df['SolarAzimuth (Degrees)']).map(math.radians)
         altitude_angles = (90. - dni_df['SolarZenith (Degrees)']).map(math.radians)
 
-        return dni_df, azimuth_angles, altitude_angles
+        dni_df['Azimuth (rad)'] = azimuth_angles
+        dni_df['Altitude (rad)'] = altitude_angles
+
+        return dni_df
 
     def request_data(self, now, end_time, duration):
         nowDateOutputFileString = now.strftime('%Y%m%d')
@@ -183,19 +186,6 @@ class RaZON():
 
         return dni_df, azimuth_angles, altitude_angles
 
-    def get_cos_factors(self, azimuth_angles, altitude_angles):
-        cos_correct_df = pd.DataFrame()
-        # Calculation of cos correction factors
-        cos_correct_df['Cos(Theta)'] = altitude_angles.map(math.cos)*azimuth_angles.map(math.sin)
-        cos_correct_df['Cos(Phi)'] = (math.sin(self.tilt)*altitude_angles.map(math.sin) + 
-                              math.cos(self.tilt)*altitude_angles.map(math.cos)*
-                              azimuth_angles.map(math.cos))
-        cos_correct_df['Theta_'] = 90.0 - cos_correct_df['Cos(Theta)'].map(math.acos).map(math.degrees)
-        cos_correct_df['Phi_'] = 90.0 - cos_correct_df['Cos(Phi)'].map(math.acos).map(math.degrees)
-        cos_correct_df['Cos(Theta)'] = cos_correct_df['Theta_'].map(math.radians).map(math.cos)
-        cos_correct_df['Cos(Phi)'] = cos_correct_df['Phi_'].map(math.radians).map(math.cos)
-        return cos_correct_df
-
     def cos_correct(self, dni_df, cos_correct_df):
         # Apply cos correction to irradiance
         illumination = dni_df['Irrad. (W/m2)']
@@ -206,39 +196,6 @@ class RaZON():
             dni_df[col] = pd.Series(cos_correct_df[col], index=dni_df.index)
         return dni_df
 
-    def get_position_from_angle(self, data, start, end,
-                                num_interp_points=0, 
-                                interp_method='linear'):
-        # Obtain cos factors and corrected data
-        dni_df, altitude_angles, azimuth_angles = data
-        cos_correct_df = self.get_cos_factors(altitude_angles, azimuth_angles)
-        # dni_df = self.cos_correct(dni_df, cos_correct_df)
-
-        angles = pd.DataFrame()
-        angles['Theta'] = cos_correct_df['Theta_']
-        angles['Phi'] = cos_correct_df['Phi_']
-
-        print('Generating the Angle to Position Map...')
-        mapping = read_and_clean_map()
-        mapping = table_interpolation(mapping, num_interp_points, interp_method)
-        mapping = fit_interp_data(mapping)
-        mapping = filter_angle_position(mapping)
-        print('Done.')
-
-        def match_angles_wrapper(mapping):
-            def match_angles_mapper(angles):
-                return match_angles(mapping, angles[0], angles[1])
-            return match_angles_mapper
-
-        print('Matching tracked angles to mapped angles...')
-        positions = angles.apply(match_angles_wrapper(mapping), axis=1)
-        print('Done.')
-        positions = [(x[0], x[1]) for x in positions]
-        positions = zip(*positions)
-        positions = pd.DataFrame(positions).transpose()
-        positions['Datetime Local'] = dni_df['Datetime Local']
-        positions.columns = ['X', 'Y', 'Datetime Local']
-        return positions
 
 def main():
     # Communicate to RaZON through local webpage
